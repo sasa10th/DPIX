@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DPIX — Development-adjusted Performance Improvement Index</title>
+  <meta name="description" content="FanGraphs 타자 데이터 기반 MLB 타자 성과 향상 지수 연구 보고서. Ridge-GBM 앙상블 모델과 Marcel 가중평균을 결합한 DPIX 지표 산출 방법론 및 결과를 제시한다.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     NAVIGATION
+══════════════════════════════════════ -->
+<div class="nav-mobile-overlay" id="nav-overlay"></div>
+<nav class="nav-mobile-panel" id="nav-mobile">
+  <ul>
+    <li><a href="#overview">개요</a></li>
+    <li><a href="#methodology">방법론</a></li>
+    <li><a href="#performance">모델 성능</a></li>
+    <li><a href="#weights">피처 가중치</a></li>
+    <li><a href="#rankings">순위</a></li>
+    <li><a href="#visuals">연구 결과</a></li>
+  </ul>
+</nav>
+<nav id="nav">
+  <div class="nav-brand">DPIX</div>
+  <ul class="nav-links">
+    <li><a href="#overview">개요</a></li>
+    <li><a href="#methodology">방법론</a></li>
+    <li><a href="#performance">모델 성능</a></li>
+    <li><a href="#weights">피처 가중치</a></li>
+    <li><a href="#rankings">순위</a></li>
+    <li><a href="#visuals">연구 결과</a></li>
+  </ul>
+  <button class="nav-hamburger" id="nav-hamburger" aria-label="메뉴 열기">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- ══════════════════════════════════════
+     HERO
+══════════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid-lines"></div>
+  <div class="hero-content">
+    <p class="hero-eyebrow">MLB Batter Analytics · 2024 Season</p>
+    <h1 class="hero-title"><span class="gold">DPIX</span></h1>
+    <p class="hero-subtitle">Development-adjusted Performance Improvement Index</p>
+    <p class="hero-desc">
+      FanGraphs 타자 데이터를 기반으로 선수의 다음 시즌 성과 향상 가능성을 100 기준(리그 평균)으로 수치화한 복합 지표이다. Marcel 가중평균, 나이 커브 보정, Ridge-GBM 앙상블, Statcast 기반 z-score 보정, 신뢰도 λ 가중치를 단계적으로 결합하여 산출한다.
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-count="324" data-dec="0">0</span>
+        <span class="hero-stat-label">분석 대상 선수</span>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-count="24.135" data-dec="3">0</span>
+        <span class="hero-stat-label">앙상블 RMSE</span>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-count="0.3322" data-dec="4">0</span>
+        <span class="hero-stat-label">GBM R²</span>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-stat">
+        <span class="hero-stat-num" data-count="100" data-dec="0">0</span>
+        <span class="hero-stat-label">리그 평균 기준</span>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-cue">
+    <span>Scroll</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     OVERVIEW
+══════════════════════════════════════ -->
+<section id="overview">
+  <div class="container">
+    <div class="section-label reveal">지표 개요</div>
+    <h2 class="section-title reveal reveal-delay-1">DPIX란 무엇인가</h2>
+    <p class="section-lead reveal reveal-delay-2">
+      DPIX는 단순 과거 성적 집계 지표가 아니다. 선수의 진정한 실력 추정치(True Talent)와 나이 발달 궤적, 통계적 행운/불운 보정, 샘플 신뢰도를 동시에 반영하는 예측 복합 지수이다.
+    </p>
+
+    <div class="overview-grid">
+      <div class="overview-formula reveal reveal-delay-1">
+        <div class="formula-title">// DPIX 산출 공식</div>
+        <div class="formula-block">
+          <span class="hl-comment">// Step 1: 모델 예측값 생성</span><br>
+          blend_pred = <span class="hl-gold">0.6</span> × Ridge + <span class="hl-gold">0.4</span> × GBM<br>
+          <div class="sep"></div>
+          <span class="hl-comment">// Step 2: DPIX_raw 산출</span><br>
+          DPIX_raw = <span class="hl-gold">100</span> × (blend_pred / lg_avg)<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; × (<span class="hl-gold">1</span> + 0.05 × tanh(z))<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; × bounce_bonus<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; × injury_penalty<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; × age_adj<br>
+          <div class="sep"></div>
+          <span class="hl-comment">// Step 3: 신뢰도 가중치 적용</span><br>
+          λ = min(<span class="hl-gold">1.0</span>, sum_2y_PA / <span class="hl-blue">800</span>)<br>
+          DPIX = λ × DPIX_raw + (<span class="hl-gold">1</span>-λ) × <span class="hl-blue">100</span>
+        </div>
+      </div>
+
+      <div class="overview-principles">
+        <div class="principle-item reveal reveal-delay-1">
+          <div class="principle-icon">λ</div>
+          <div class="principle-text">
+            <h4>신뢰도 가중 평균 회귀</h4>
+            <p>과거 2년 타석 합산(sum_2y_PA)이 800 미만인 선수는 λ가 1 미만으로 계산되어 DPIX가 리그 평균(100)쪽으로 수렴한다. 소표본 선수의 극단값을 억제하는 핵심 설계이다.</p>
+          </div>
+        </div>
+        <div class="principle-item reveal reveal-delay-2">
+          <div class="principle-icon">3Y</div>
+          <div class="principle-text">
+            <h4>Marcel 3개년 가중평균</h4>
+            <p>당해 시즌 5, 전년 3, 2년 전 2의 비율로 가중 평균을 산출하여 True Talent를 추정한다. 데이터 부족 선수는 유효 가중치 합으로 정규화한다.</p>
+          </div>
+        </div>
+        <div class="principle-item reveal reveal-delay-3">
+          <div class="principle-icon">∂</div>
+          <div class="principle-text">
+            <h4>3차 다항 나이 커브</h4>
+            <p>연령별 기대 성적을 cubic polynomial로 피팅하고 실제 성적과의 잔차를 wRC+_age_resid 피처로 활용한다. 모든 피팅은 학습 데이터(≤ 2023) 전용으로 수행된다.</p>
+          </div>
+        </div>
+        <div class="principle-item reveal reveal-delay-4">
+          <div class="principle-icon">Δ</div>
+          <div class="principle-text">
+            <h4>luck_residual 운/불운 보정</h4>
+            <p>xwOBA − wOBA의 차이를 luck_residual로 정의한다. 양수이면 타구 질 대비 성적이 저조한 불운, 음수이면 과운에 해당하며 DPIX 산출 시 보정 신호로 사용된다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     METHODOLOGY
+══════════════════════════════════════ -->
+<section id="methodology">
+  <div class="container">
+    <div class="section-label reveal">연구 방법론</div>
+    <h2 class="section-title reveal reveal-delay-1">5단계 산출 파이프라인</h2>
+    <p class="section-lead reveal reveal-delay-2">
+      모든 통계량은 학습 데이터(Season ≤ 2023)에서만 산출되며, 검증·예측 데이터에는 단방향으로 적용된다. 데이터 누수(leakage)를 원천적으로 차단하는 설계 원칙을 엄격히 준수한다.
+    </p>
+
+    <div class="steps-grid reveal reveal-delay-1">
+      <div class="step-item">
+        <div class="step-num">01</div>
+        <div class="step-label">Feature Engineering</div>
+        <div class="step-title">Marcel 가중평균 및 피처 공학</div>
+        <div class="step-desc">3개년 Marcel 가중평균으로 True Talent를 추정한다. wRC+, xwOBA, BB%, K%, Barrel%, ISO 등 핵심 지표를 대상으로 산출하며 데이터 부족 선수는 유효 가중치로 정규화한다.</div>
+        <div class="step-connector"></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">02</div>
+        <div class="step-label">Age Adjustment</div>
+        <div class="step-title">3차 다항 나이 커브 보정</div>
+        <div class="step-desc">학습 데이터로 연령별 기대 성적을 cubic polynomial 회귀로 피팅한다. 실제 성적과의 잔차(wRC+_age_resid)를 연령 보정 피처로 활용하여 발달·노화 패턴을 반영한다.</div>
+        <div class="step-connector"></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">03</div>
+        <div class="step-label">Model Training</div>
+        <div class="step-title">Ridge-GBM 앙상블 학습</div>
+        <div class="step-desc">Ridge는 선형 관계의 안정적 추정을 담당하고, GBM은 Marcel 피처의 비선형 상호작용을 포착한다. 앙상블 비율은 TimeSeriesSplit(n=5) CV로 데이터 기반 결정한다.</div>
+        <div class="step-connector"></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">04</div>
+        <div class="step-label">Composite Scoring</div>
+        <div class="step-title">DPIX_raw 산출 및 보정</div>
+        <div class="step-desc">앙상블 예측값을 리그 평균 대비 지수화한다. Statcast 복합 z-score, 바운스백 보너스, 부상 패널티, 나이 보정 계수를 순차 적용하며 모든 계수는 클리핑으로 과잉 보정을 억제한다.</div>
+        <div class="step-connector"></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">05</div>
+        <div class="step-label">Reliability Weighting</div>
+        <div class="step-title">신뢰도 λ로 평균 회귀 보정</div>
+        <div class="step-desc">과거 2년 타석 합산 기반 λ = min(1.0, sum_2y_PA / 800)를 산출한다. 소표본 선수일수록 DPIX가 리그 평균(100)에 수렴하여 극단값을 통계적으로 억제한다.</div>
+      </div>
+    </div>
+
+    <div class="method-detail-grid">
+      <div class="detail-card reveal reveal-delay-1">
+        <div class="detail-card-header">
+          <h3>부상·단축 시즌 플래깅</h3>
+          <span class="badge">Injury Flag</span>
+        </div>
+        <div class="detail-card-body">
+          <p>2020 시즌은 COVID-19로 인한 60경기 단축 시즌으로 전체 플래깅 처리하였다. 그 외 시즌은 출장 경기(G &lt; 81) 또는 타석 수(PA &lt; 250) 기준으로 부상 시즌을 판별한다.</p>
+          <p>전년도 부상 이력(prev_injury = 1)이 있는 선수에게는 bounce_bonus를 적용하여, 건강한 시즌으로의 회복 가능성을 DPIX에 반영한다.</p>
+          <div class="formula-inline">
+            injury_flag = 1 &nbsp;if G &lt; 81 or PA &lt; 250<br>
+            bounce_bonus = 1 + 0.03 × prev_injury
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-card reveal reveal-delay-2">
+        <div class="detail-card-header">
+          <h3>Statcast 복합 z-score</h3>
+          <span class="badge blue">xStats</span>
+        </div>
+        <div class="detail-card-body">
+          <p>xwOBA, Barrel%, HardHit%, EV 등 Statcast 지표를 학습 데이터 기준 z-score로 정규화하여 복합 점수를 산출한다. K%는 부호를 역전하여 z-score에 반영한다.</p>
+          <p>복합 z-score는 tanh 함수로 스쿼싱되어 DPIX 산출에 ±5% 범위 내에서 기여한다. 단일 Statcast 지표의 과도한 영향을 방지하는 설계이다.</p>
+          <div class="formula-inline">
+            composite_z = Σ (w_i × z_i)<br>
+            adjustment = 1 + 0.05 × tanh(composite_z)
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-card reveal reveal-delay-3">
+        <div class="detail-card-header">
+          <h3>상관계수 기반 가중치</h3>
+          <span class="badge">Pearson r</span>
+        </div>
+        <div class="detail-card-body">
+          <p>학습 데이터에서 next_wRC+와 각 피처 간 피어슨 상관계수를 산출하고 정규화하여 DPIX 복합 지수의 초기 가중치로 사용한다.</p>
+          <p>최종 가중치는 상관계수 기반 가중치와 Ridge 계수 기반 가중치의 조화평균으로 결정된다. 두 관점을 결합하여 단순 상관관계의 한계를 보완한다.</p>
+          <div class="formula-inline">
+            w_final = HarmonicMean(w_corr, w_ridge)
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-card reveal reveal-delay-4">
+        <div class="detail-card-header">
+          <h3>데이터 누수 방지 원칙</h3>
+          <span class="badge">Leakage-Free</span>
+        </div>
+        <div class="detail-card-body">
+          <p>train_cutoff = 2023으로 설정하여 학습·검증 데이터를 사전 분리한다. 나이 커브 피팅, 리그 평균 산출, 상관계수 계산, Ridge/GBM 학습은 모두 학습 데이터(Season ≤ 2023) 전용으로 수행된다.</p>
+          <p>검증 및 예측 데이터(2024, 2025)에는 학습된 변환을 단방향으로 적용하여 미래 정보가 모델에 유입되지 않도록 한다.</p>
+          <div class="formula-inline">
+            Train: Season ≤ 2023<br>
+            Target: Season ∈ {2024, 2025}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     MODEL PERFORMANCE
+══════════════════════════════════════ -->
+<section id="performance">
+  <div class="container">
+    <div class="section-label reveal">모델 성능</div>
+    <h2 class="section-title reveal reveal-delay-1">Ridge · GBM · 앙상블 비교</h2>
+    <p class="section-lead reveal reveal-delay-2">
+      Ridge 회귀는 선형 관계에서 낮은 분산을 유지하고, GBM은 비선형 상호작용을 포착하여 단독으로 더 높은 R²를 달성한다. 앙상블은 TimeSeriesSplit CV로 결정된 최적 비율(Ridge 60% / GBM 40%)로 두 모델을 결합한다.
+    </p>
+
+    <div class="perf-grid">
+      <div class="reveal reveal-delay-1">
+        <div class="metric-cards">
+          <div class="metric-card ridge">
+            <div class="metric-card-name">Ridge</div>
+            <div class="metric-card-rmse">24.662</div>
+            <div class="metric-card-label">RMSE</div>
+            <div class="metric-card-r2">R² = 0.3008</div>
+          </div>
+          <div class="metric-card gbm">
+            <div class="metric-card-name">GBM</div>
+            <div class="metric-card-rmse">24.101</div>
+            <div class="metric-card-label">RMSE</div>
+            <div class="metric-card-r2">R² = 0.3322</div>
+          </div>
+          <div class="metric-card ensemble">
+            <div class="metric-card-name">Ensemble</div>
+            <div class="metric-card-rmse">24.135</div>
+            <div class="metric-card-label">RMSE</div>
+            <div class="metric-card-r2">R² = 0.3303</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="chart-container">
+            <canvas id="modelChart"></canvas>
+          </div>
+        </div>
+
+        <div class="blend-info" style="margin-top:1rem">
+          <div class="blend-info-title">// 앙상블 혼합 비율 (TimeSeriesSplit CV 결정)</div>
+          <div class="blend-bar">
+            <div class="blend-ridge">Ridge 60%</div>
+            <div class="blend-gbm">GBM 40%</div>
+          </div>
+          <div class="blend-legend">
+            <div class="blend-legend-item">
+              <div class="blend-legend-dot" style="background:#484848"></div>
+              Ridge — 선형 안정성, 낮은 분산
+            </div>
+            <div class="blend-legend-item">
+              <div class="blend-legend-dot" style="background:var(--gold-dim)"></div>
+              GBM — 비선형 상호작용 포착
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal reveal-delay-2">
+        <div class="card">
+          <p style="font-family:var(--font-mono);font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-muted);margin-bottom:1rem">// CV RMSE by Ridge Weight (GBM = 1 - Ridge)</p>
+          <div class="chart-container-tall">
+            <canvas id="blendChart"></canvas>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1.25rem">
+          <p style="font-family:var(--font-mono);font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-muted);margin-bottom:1rem">// GBM 하이퍼파라미터</p>
+          <div class="formula-block" style="font-family:var(--font-mono);font-size:.78rem;line-height:2.2;color:var(--text-primary)">
+            max_depth&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color:var(--gold)">3</span>&nbsp;&nbsp;<span style="color:var(--text-muted)">// 보수적 트리 깊이</span><br>
+            n_estimators&nbsp;= <span style="color:var(--gold)">150</span><br>
+            learning_rate = <span style="color:var(--gold)">0.03</span><br>
+            subsample&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color:var(--gold)">0.8</span><br>
+            random_state&nbsp;= <span style="color:var(--steel-light)">42</span>
+          </div>
+          <p style="font-size:.8rem;color:var(--text-muted);margin-top:.75rem;line-height:1.7">야구 통계는 노이즈가 높은 도메인이므로 과적합 방지를 위해 의도적으로 보수적인 하이퍼파라미터를 적용하였다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     FEATURE WEIGHTS
+══════════════════════════════════════ -->
+<section id="weights">
+  <div class="container">
+    <div class="section-label reveal">피처 가중치</div>
+    <h2 class="section-title reveal reveal-delay-1">DPIX 구성 요소별 기여도</h2>
+    <p class="section-lead reveal reveal-delay-2">
+      최종 가중치는 next_wRC+와의 피어슨 상관계수 기반 가중치와 Ridge 계수 기반 가중치의 조화평균으로 산출된다. 합산 시 가중치 합계는 1.0이 되도록 정규화된다.
+    </p>
+
+    <div class="weights-layout">
+      <div>
+        <div id="weight-bars" class="weight-bars"></div>
+      </div>
+      <div class="reveal reveal-delay-2">
+        <div class="card">
+          <div style="font-family:var(--font-mono);font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-muted);margin-bottom:1.5rem">// 피처 해석</div>
+          <div style="display:flex;flex-direction:column;gap:1.25rem">
+            <div>
+              <div style="font-family:var(--font-mono);font-size:.78rem;color:var(--gold);margin-bottom:.35rem">marcel_xwOBA (18.2%)</div>
+              <p style="font-size:.82rem;color:var(--text-secondary);line-height:1.7">타구 질 기반 기대 가중출루율의 3개년 Marcel 평균. 타자의 컨택 능력과 파워를 통합하는 핵심 지표이다.</p>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:.78rem;color:var(--gold);margin-bottom:.35rem">marcel_wRC+ (17.5%)</div>
+              <p style="font-size:.82rem;color:var(--text-secondary);line-height:1.7">구장 보정 타석당 득점 기여의 Marcel 평균. 리그 평균(100) 대비 상대적 타격 가치를 집약한다.</p>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:.78rem;color:#808080;margin-bottom:.35rem">wRC+_age_resid (16.9%)</div>
+              <p style="font-size:.82rem;color:var(--text-secondary);line-height:1.7">나이 커브 기대값 대비 wRC+ 잔차. 연령 발달 패턴을 초과하는 실제 성장·노화 신호를 포착한다.</p>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:.78rem;color:#808080;margin-bottom:.35rem">marcel_Barrel% (15.3%)</div>
+              <p style="font-size:.82rem;color:var(--text-secondary);line-height:1.7">타구 질의 정점 지표인 배럴 비율의 Marcel 평균. 장타력과 컨택 효율을 동시에 반영한다.</p>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:.78rem;color:var(--text-muted);margin-bottom:.35rem">luck_residual / delta_wRC+ (합산 11.4%)</div>
+              <p style="font-size:.82rem;color:var(--text-secondary);line-height:1.7">운·불운 보정 신호와 전년 대비 wRC+ 변화량. 독립 기여도는 낮으나 보정 역할에서 중요한 피처이다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     RANKINGS TABLE
+══════════════════════════════════════ -->
+<section id="rankings">
+  <div class="container">
+    <div class="section-label reveal">2024 시즌 결과</div>
+    <h2 class="section-title reveal reveal-delay-1">DPIX 타자 순위</h2>
+    <p class="section-lead reveal reveal-delay-2">
+      2024 시즌 대상 324명의 DPIX 산출 결과 전체를 제시한다. 열 헤더를 클릭하면 정렬이 가능하며, 선수명으로 검색할 수 있다. λ 값이 1 미만인 선수는 소표본 보정이 적용된 상태이다.
+    </p>
+
+    <div class="table-controls reveal reveal-delay-1">
+      <input type="text" class="search-box" id="rankings-search" placeholder="선수명 검색…">
+      <span class="table-info" id="table-info"></span>
+    </div>
+    <p class="table-scroll-hint">← 좌우로 스크롤하여 모든 열을 확인하세요 →</p>
+
+    <div class="table-wrapper reveal reveal-delay-2" id="table-wrapper">
+      <table id="rankings-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th data-col="Name">선수명 <span class="sort-indicator">↕</span></th>
+            <th data-col="Age">나이 <span class="sort-indicator">↕</span></th>
+            <th data-col="PA">PA <span class="sort-indicator">↕</span></th>
+            <th data-col="wRC+">wRC+ <span class="sort-indicator">↕</span></th>
+            <th data-col="WAR">WAR <span class="sort-indicator">↕</span></th>
+            <th data-col="luck_residual">luck_res <span class="sort-indicator">↕</span></th>
+            <th>λ</th>
+            <th data-col="DPIX" class="sorted">DPIX <span class="sort-indicator">↓</span></th>
+          </tr>
+        </thead>
+        <tbody id="rankings-tbody"></tbody>
+      </table>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     VISUALS
+══════════════════════════════════════ -->
+<section id="visuals">
+  <div class="container">
+    <div class="section-label reveal">연구 시각화</div>
+    <h2 class="section-title reveal reveal-delay-1">분석 결과 차트</h2>
+    <div class="visuals-intro">
+      <p class="section-lead reveal reveal-delay-2">연구 과정에서 생성된 주요 시각화 결과물이다. 이미지를 클릭하면 확대 보기가 가능하다.</p>
+    </div>
+
+    <div class="img-grid">
+      <div class="img-card img-card-wide reveal">
+        <div class="img-card-header">
+          <span class="img-card-title">DPIX 최종 결과 분포</span>
+          <span class="img-card-tag">dpix_results_final.png</span>
+        </div>
+        <img src="images/dpix_results_final.png" alt="DPIX 최종 결과 분포 차트" loading="lazy">
+        <div class="img-card-footer">2024 시즌 324명의 DPIX 분포와 상위 선수 순위를 시각화하였다. 리그 평균(100) 기준으로 선수별 성과 향상 잠재력이 표현된다.</div>
+      </div>
+
+      <div class="img-card reveal reveal-delay-1">
+        <div class="img-card-header">
+          <span class="img-card-title">나이 커브 피팅</span>
+          <span class="img-card-tag">age_curves_final.png</span>
+        </div>
+        <img src="images/age_curves_final.png" alt="나이 커브 피팅 결과" loading="lazy">
+        <div class="img-card-footer">wRC+ 등 핵심 지표에 대한 3차 다항 나이 커브 피팅 결과이다. 학습 데이터(≤ 2023) 기준으로 연령별 기대 성적 궤적이 도출된다.</div>
+      </div>
+
+      <div class="img-card reveal reveal-delay-2">
+        <div class="img-card-header">
+          <span class="img-card-title">모델 비교</span>
+          <span class="img-card-tag">model_comparison_final.png</span>
+        </div>
+        <img src="images/model_comparison_final.png" alt="Ridge GBM 앙상블 모델 비교" loading="lazy">
+        <div class="img-card-footer">Ridge, GBM, Ensemble 세 모델의 예측 성능을 RMSE와 R²로 비교한 결과이다. GBM이 단독 R² 최고치를 달성하였다.</div>
+      </div>
+
+      <div class="img-card reveal reveal-delay-1">
+        <div class="img-card-header">
+          <span class="img-card-title">GBM 학습 곡선</span>
+          <span class="img-card-tag">gbm_learning_curve_final.png</span>
+        </div>
+        <img src="images/gbm_learning_curve_final.png" alt="GBM 학습 곡선" loading="lazy">
+        <div class="img-card-footer">GBM 모델의 학습 데이터 크기에 따른 훈련 및 검증 RMSE 변화를 나타낸다. 과적합 수준과 학습 안정성을 진단하는 데 활용된다.</div>
+      </div>
+
+      <div class="img-card reveal reveal-delay-2">
+        <div class="img-card-header">
+          <span class="img-card-title">앙상블 CV 혼합 비율</span>
+          <span class="img-card-tag">blend_cv_final.png</span>
+        </div>
+        <img src="images/blend_cv_final.png" alt="앙상블 CV 혼합 비율 최적화" loading="lazy">
+        <div class="img-card-footer">TimeSeriesSplit(n=5) CV를 통해 Ridge 가중치 후보(0.5~1.0) 별 RMSE를 비교하였다. Ridge 0.6 / GBM 0.4 비율에서 최저 CV RMSE(23.3343)가 달성되었다.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     FOOTER
+══════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">DPIX</div>
+      <p class="footer-desc">
+        Development-adjusted Performance Improvement Index. FanGraphs 타자 데이터 기반 MLB 타자 성과 향상 지수 연구이다. 모든 산출 과정은 학습·검증 데이터 분리 원칙 하에 수행되었다.
+      </p>
+    </div>
+    <div class="footer-meta">
+      <div>학습 기준: Season ≤ 2023</div>
+      <div>예측 대상: 2024 Season</div>
+      <div>분석 선수: 324명 (PA ≥ 80)</div>
+      <div>데이터 출처: FanGraphs Leaderboards</div>
+      <div style="margin-top:.75rem;color:var(--text-muted)">Ridge RMSE 24.662 · GBM RMSE 24.101 · Ensemble RMSE 24.135</div>
+    </div>
+  </div>
+</footer>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" aria-label="닫기">✕</button>
+  <img id="lightbox-img" src="" alt="확대 이미지">
+</div>
+
+<script src="js/main.js"></script>
+</body>
+</html>
