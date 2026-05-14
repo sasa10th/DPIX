@@ -62,12 +62,12 @@
       </div>
       <div class="hero-divider"></div>
       <div class="hero-stat">
-        <span class="hero-stat-num" data-count="24.135" data-dec="3">0</span>
+        <span class="hero-stat-num" data-count="23.838" data-dec="3">0</span>
         <span class="hero-stat-label">앙상블 RMSE</span>
       </div>
       <div class="hero-divider"></div>
       <div class="hero-stat">
-        <span class="hero-stat-num" data-count="0.3322" data-dec="4">0</span>
+        <span class="hero-stat-num" data-count="0.3234" data-dec="4">0</span>
         <span class="hero-stat-label">GBM R²</span>
       </div>
       <div class="hero-divider"></div>
@@ -203,10 +203,11 @@
           <span class="badge">Injury Flag</span>
         </div>
         <div class="detail-card-body">
-          <p>2020 시즌은 COVID-19로 인한 60경기 단축 시즌으로 전체 플래깅 처리하였다. 그 외 시즌은 출장 경기(G &lt; 81) 또는 타석 수(PA &lt; 250) 기준으로 부상 시즌을 판별한다.</p>
+          <p>단순 이진 기준(G &lt; 81 or PA &lt; 250)에서 <strong>Injury Score</strong> 방식으로 전환하였다. 출장 감소율(AD), 성과 하락율(PD), 결장 경기 수(GM) 세 요소를 가중 합산하여 연속형 부상 점수를 산출하고, 학습 데이터 기준 85th percentile 임계값(0.1900)을 초과하면 injury_flag = 1로 처리한다. 2020 시즌은 COVID-19 단축 시즌으로 전체 플래깅한다.</p>
           <p>전년도 부상 이력(prev_injury = 1)이 있는 선수에게는 bounce_bonus를 적용하여, 건강한 시즌으로의 회복 가능성을 DPIX에 반영한다.</p>
           <div class="formula-inline">
-            injury_flag = 1 &nbsp;if G &lt; 81 or PA &lt; 250<br>
+            injury_score = 0.5 × AD + 0.3 × PD + 0.2 × GM_norm<br>
+            injury_flag = 1 &nbsp;if injury_score ≥ 0.1900 (85th pct)<br>
             bounce_bonus = 1 + 0.03 × prev_injury
           </div>
         </div>
@@ -275,21 +276,21 @@
         <div class="metric-cards">
           <div class="metric-card ridge">
             <div class="metric-card-name">Ridge</div>
-            <div class="metric-card-rmse">24.662</div>
+            <div class="metric-card-rmse">23.845</div>
             <div class="metric-card-label">RMSE</div>
-            <div class="metric-card-r2">R² = 0.3008</div>
+            <div class="metric-card-r2">R² = 0.3463</div>
           </div>
           <div class="metric-card gbm">
             <div class="metric-card-name">GBM</div>
-            <div class="metric-card-rmse">24.101</div>
+            <div class="metric-card-rmse">24.259</div>
             <div class="metric-card-label">RMSE</div>
-            <div class="metric-card-r2">R² = 0.3322</div>
+            <div class="metric-card-r2">R² = 0.3234</div>
           </div>
           <div class="metric-card ensemble">
             <div class="metric-card-name">Ensemble</div>
-            <div class="metric-card-rmse">24.135</div>
+            <div class="metric-card-rmse">23.838</div>
             <div class="metric-card-label">RMSE</div>
-            <div class="metric-card-r2">R² = 0.3303</div>
+            <div class="metric-card-r2">R² = 0.3467</div>
           </div>
         </div>
         <div class="card">
@@ -461,7 +462,7 @@
           <span class="img-card-tag">model_comparison_final.png</span>
         </div>
         <img src="images/model_comparison_final.png" alt="Ridge GBM 앙상블 모델 비교" loading="lazy">
-        <div class="img-card-footer">Ridge, GBM, Ensemble 세 모델의 예측 성능을 RMSE와 R²로 비교한 결과이다. GBM이 단독 R² 최고치를 달성하였다.</div>
+        <div class="img-card-footer">Ridge, GBM, Ensemble 세 모델의 예측 성능을 RMSE와 R²로 비교한 결과이다. Ensemble이 최고 R²(0.3467)를 달성하였으며, GBM 단독보다 앙상블이 우수한 결과를 보였다.</div>
       </div>
 
       <div class="img-card reveal reveal-delay-1">
@@ -479,7 +480,7 @@
           <span class="img-card-tag">blend_cv_final.png</span>
         </div>
         <img src="images/blend_cv_final.png" alt="앙상블 CV 혼합 비율 최적화" loading="lazy">
-        <div class="img-card-footer">TimeSeriesSplit(n=5) CV를 통해 Ridge 가중치 후보(0.5~1.0) 별 RMSE를 비교하였다. Ridge 0.6 / GBM 0.4 비율에서 최저 CV RMSE(23.3343)가 달성되었다.</div>
+        <div class="img-card-footer">TimeSeriesSplit(n=5) CV를 통해 Ridge 가중치 후보(0.5~1.0) 별 RMSE를 비교하였다. Ridge 0.6 / GBM 0.4 비율에서 최저 CV RMSE(23.4041)가 달성되었다.</div>
       </div>
     </div>
   </div>
@@ -501,7 +502,7 @@
       <div>예측 대상: 2024 Season</div>
       <div>분석 선수: 324명 (PA ≥ 80)</div>
       <div>데이터 출처: FanGraphs Leaderboards</div>
-      <div style="margin-top:.75rem;color:var(--text-muted)">Ridge RMSE 24.662 · GBM RMSE 24.101 · Ensemble RMSE 24.135</div>
+      <div style="margin-top:.75rem;color:var(--text-muted)">Ridge RMSE 23.845 · GBM RMSE 24.259 · Ensemble RMSE 23.838</div>
     </div>
   </div>
 </footer>
