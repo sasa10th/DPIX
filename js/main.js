@@ -18,13 +18,13 @@ const WEIGHTS = [
 
 const MODEL_PERF = {
   labels: ['Ridge', 'GBM', 'Ensemble'],
-  rmse:   [24.662, 24.101, 24.135],
-  r2:     [0.3008, 0.3322, 0.3303],
+  rmse:   [23.845, 24.259, 23.838],
+  r2:     [0.3463, 0.3234, 0.3467],
 };
 
 const CV_RMSE = {
   ratios: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-  values: [23.3494, 23.3343, 23.3542, 23.409, 23.4985, 23.6221],
+  values: [23.4317, 23.4041, 23.4051, 23.4347, 23.4928, 23.5792],
 };
 
 /* ─── NAV scroll behavior ─── */
@@ -269,8 +269,8 @@ function initBlendChart() {
       },
       scales: {
         y: {
-          min: 23.38,
-          max: 23.62,
+          min: 23.37,
+          max: 23.61,
           grid: { color: 'rgba(30,49,80,.5)' },
           ticks: { callback: v => v.toFixed(3) }
         },
